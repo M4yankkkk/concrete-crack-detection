@@ -19,28 +19,28 @@ function App() {
       setError(null);
     }
   };
-// Generate PDF Report
+  // Generate PDF Report
   const downloadReport = () => {
-  const doc = new jsPDF();
-  doc.setFontSize(20);
-  doc.text("Structural Health Inspection Report", 10, 20);
+    const doc = new jsPDF();
+    doc.setFontSize(20);
+    doc.text("Structural Health Inspection Report", 10, 20);
 
-  doc.setFontSize(12);
-  doc.text(`Filename: ${result.filename}`, 10, 40);
-  doc.text(`Date: ${new Date().toLocaleString()}`, 10, 50);
-  doc.text(`Status: ${result.result}`, 10, 60);
-  doc.text(`Confidence Score: ${result.confidence}`, 10, 70);
+    doc.setFontSize(12);
+    doc.text(`Filename: ${result.filename}`, 10, 40);
+    doc.text(`Date: ${new Date().toLocaleString()}`, 10, 50);
+    doc.text(`Status: ${result.result}`, 10, 60);
+    doc.text(`Confidence Score: ${result.confidence}`, 10, 70);
 
-  if (result.raw_score > 0.5) {
-    doc.setTextColor(255, 0, 0);
-    doc.text("ACTION REQUIRED: Structural Crack Detected", 10, 90);
-  } else {
-    doc.setTextColor(0, 128, 0);
-    doc.text("Structure appears healthy.", 10, 90);
-  }
+    if (result.raw_score > 0.5) {
+      doc.setTextColor(255, 0, 0);
+      doc.text("ACTION REQUIRED: Structural Crack Detected", 10, 90);
+    } else {
+      doc.setTextColor(0, 128, 0);
+      doc.text("Structure appears healthy.", 10, 90);
+    }
 
-  doc.save("inspection_report.pdf");
-};
+    doc.save("inspection_report.pdf");
+  };
 
   // Send to Backend
   const handleUpload = async () => {
@@ -54,7 +54,8 @@ function App() {
 
     try {
       // Note: Ensure your backend is running on port 8000
-      const response = await axios.post("http://localhost:8000/predict", formData, {
+      const apiUrl = import.meta.env.VITE_API_URL; // Load from .env
+      const response = await axios.post(`${apiUrl}/predict`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       setResult(response.data);
@@ -74,14 +75,14 @@ function App() {
       </header>
 
       <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-        
+
         {/* Upload Area */}
         <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center hover:border-blue-500 transition-colors">
-          <input 
-            type="file" 
+          <input
+            type="file"
             accept="image/*"
-            onChange={handleFileChange} 
-            className="hidden" 
+            onChange={handleFileChange}
+            className="hidden"
             id="fileInput"
           />
           <label htmlFor="fileInput" className="cursor-pointer flex flex-col items-center">
@@ -101,8 +102,8 @@ function App() {
           onClick={handleUpload}
           disabled={!selectedFile || loading}
           className={`w-full mt-6 py-3 rounded-lg font-semibold text-white transition-all
-            ${!selectedFile || loading 
-              ? 'bg-slate-400 cursor-not-allowed' 
+            ${!selectedFile || loading
+              ? 'bg-slate-400 cursor-not-allowed'
               : 'bg-blue-600 hover:bg-blue-700 shadow-md hover:shadow-lg'}`}
         >
           {loading ? "Analyzing Structure..." : "Analyze Image"}
@@ -117,16 +118,14 @@ function App() {
 
         {/* Results Section */}
         {result && (
-          <div className={`mt-6 p-4 rounded-lg border-l-4 ${
-            result.raw_score > 0.5 ? "bg-red-50 border-red-500" : "bg-green-50 border-green-500"
-          }`}>
+          <div className={`mt-6 p-4 rounded-lg border-l-4 ${result.raw_score > 0.5 ? "bg-red-50 border-red-500" : "bg-green-50 border-green-500"
+            }`}>
             <h3 className="text-lg font-bold text-slate-800">Analysis Report</h3>
-            
+
             <div className="mt-2 flex justify-between items-center">
               <span className="text-slate-600">Status:</span>
-              <span className={`font-bold ${
-                result.raw_score > 0.5 ? "text-red-600" : "text-green-600"
-              }`}>
+              <span className={`font-bold ${result.raw_score > 0.5 ? "text-red-600" : "text-green-600"
+                }`}>
                 {result.result}
               </span>
             </div>
@@ -135,7 +134,7 @@ function App() {
               <span className="text-slate-600">Confidence:</span>
               <span className="font-mono text-slate-800">{result.confidence}</span>
             </div>
-            
+
             <div className="mt-3 text-xs text-slate-400 text-center">
               Filename: {result.filename}
             </div>
@@ -143,10 +142,10 @@ function App() {
         )}
 
         <button onClick={downloadReport} className="mt-4 w-full bg-slate-700 text-white py-2 rounded">
-  Download PDF Report
-</button>
+          Download PDF Report
+        </button>
       </div>
-      
+
       <footer className="mt-10 text-slate-400 text-sm">
         Built with TensorFlow & React • NITK Project
       </footer>
