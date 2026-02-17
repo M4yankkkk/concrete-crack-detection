@@ -8,6 +8,13 @@ venv/
 env/
 .env
 
+# --- Tests and evaluation ---
+evaluate.py
+test.py
+find_best_threshold.py
+fine_tune.py
+train.py
+
 # --- Dataset (Too big for GitHub) ---
 dataset_final/
 dataset/
