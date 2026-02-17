@@ -1,0 +1,26 @@
+# --- System Junk ---
+__pycache__/
+*.py[cod]
+.DS_Store
+
+# --- Environments ---
+venv/
+env/
+.env
+
+# --- Dataset (Too big for GitHub) ---
+dataset_final/
+dataset/
+
+# --- Frontend Dependencies ---
+frontend/node_modules/
+frontend/dist/
+
+# --- IDE Settings ---
+.vscode/
+.idea/
+
+# --- Large Model Files (Optional) ---
+# GitHub has a 100MB limit. 
+# MobileNetV2 is small (~15MB), so you CAN upload it.
+# But if you have other huge files, ignore them here.
