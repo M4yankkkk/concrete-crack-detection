@@ -73,11 +73,16 @@ async def predict(file: UploadFile = File(...)):
         prediction = model.predict(processed_image)
         score = float(prediction[0][0]) # 0.0 to 1.0
         
-        # Threshold Logic (You can tweak this 0.5 value)
+        # Threshold: score > 0.5 → Crack detected
         # Closer to 1.0 means "Positive" (Crack)
         # Closer to 0.0 means "Negative" (No Crack)
         label = "CRACK DETECTED ⚠️" if score > 0.5 else "Safe / No Crack ✅"
-        confidence = score if score > 0.5 else 1 - score
+        if score > 0.5:
+            # Normalize so 0.5 → 0% and 1.0 → 100% confidence
+            confidence = (score - 0.5) / (1.0 - 0.5)
+        else:
+            # Safe: distance from the 0.5 boundary → higher = safer
+            confidence = 1 - score
         
         return {
             "filename": file.filename,
