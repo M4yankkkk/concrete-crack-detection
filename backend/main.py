@@ -117,6 +117,10 @@ def overlay_heatmap(heatmap, original_image):
 def home():
     return {"status": "System Online", "gpu_enabled": len(tf.config.list_physical_devices('GPU')) > 0}
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     if not model:
