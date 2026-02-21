@@ -209,28 +209,58 @@ export default function App() {
     doc.setFillColor(crack ? 220 : 22, crack ? 38 : 163, crack ? 38 : 74);
     doc.roundedRect(14, barY + 4, fillW, 6, 2, 2, 'F');
 
-    // ── Risk assessment ──────────────────────────────────────────────────
-    const riskY = barY + 24;
-    doc.setFillColor(252, 252, 252);
-    doc.setDrawColor(210, 210, 210);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(14, riskY, pageW - 28, 32, 3, 3, 'FD');
+    // ── Grad-CAM Heatmap + Risk Assessment (same page, side-by-side) ─────
+    const sectionY = barY + 18;
 
+    // Section label
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(90, 90, 90);
-    doc.text('RISK ASSESSMENT', 20, riskY + 9);
+    doc.text('GRAD-CAM VISUALIZATION', 14, sectionY);
+
+    // Small heatmap on the LEFT (55×55 mm)
+    const hmSize = 55;
+    if (result.heatmap) {
+      doc.addImage(result.heatmap, 'JPEG', 14, sectionY + 4, hmSize, hmSize);
+    }
+
+    // Caption below heatmap
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(130, 130, 130);
+    doc.text(
+      'Warm zones = AI focus areas.',
+      14, sectionY + 4 + hmSize + 4, { maxWidth: hmSize }
+    );
+
+    // Risk assessment panel on the RIGHT
+    const riskX = 14 + hmSize + 8;
+    const riskW = pageW - riskX - 14;
+    const riskY = sectionY + 4;
+    doc.setFillColor(252, 252, 252);
+    doc.setDrawColor(210, 210, 210);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(riskX, riskY, riskW, hmSize, 3, 3, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(90, 90, 90);
+    doc.text('RISK ASSESSMENT', riskX + 5, riskY + 9);
+
+    // Coloured risk level badge
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(crack ? 185 : 16, crack ? 20 : 120, crack ? 20 : 56);
+    doc.text(crack ? 'HIGH RISK' : 'LOW RISK', riskX + 5, riskY + 19);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8.5);
+    doc.setFontSize(7.5);
     doc.setTextColor(50, 50, 50);
     doc.text(
       crack
-        ? `Risk Level: HIGH  |  Score ${result.raw_score.toFixed(4)} exceeds threshold of 0.50
-Recommended Action: Conduct a detailed structural survey and consult a licensed civil engineer immediately.`
-        : `Risk Level: LOW  |  Score ${result.raw_score.toFixed(4)} is below threshold of 0.50
-Recommended Action: Routine periodic monitoring. No immediate remediation required.`,
-      20, riskY + 18, { maxWidth: pageW - 40 }
+        ? `Score ${result.raw_score.toFixed(4)} exceeds threshold of 0.50.\nConduct a detailed structural survey\nand consult a licensed civil engineer\nimmediately.`
+        : `Score ${result.raw_score.toFixed(4)} is below threshold of 0.50.\nRoutine periodic monitoring.\nNo immediate remediation required.`,
+      riskX + 5, riskY + 27, { maxWidth: riskW - 8 }
     );
 
     // ── Footer ───────────────────────────────────────────────────────────
@@ -301,7 +331,30 @@ Recommended Action: Routine periodic monitoring. No immediate remediation requir
             id="fileInput"
           />
 
-          {preview ? (
+          {result && result.heatmap ? (
+            <div className="flex flex-col items-center w-full">
+              <div className="relative w-full">
+                <img
+                  src={result.heatmap}
+                  alt="AI Grad-CAM Heatmap"
+                  className="w-full object-cover max-h-64"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <span className="absolute bottom-3 left-3 text-xs text-neutral-300 font-medium">
+                  {selectedFile?.name}
+                </span>
+                <span className="absolute bottom-3 right-3 text-xs text-neutral-400">
+                  Click to change
+                </span>
+              </div>
+              <div className="w-full px-4 py-2.5 bg-blue-950/40 border-t border-blue-800/30 flex flex-col items-center gap-1">
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/20 text-blue-300 font-bold text-xs rounded-full border border-blue-500/30">
+                  🔍 AI Attention Heatmap (Grad-CAM)
+                </span>
+                <p className="text-xs text-neutral-500">Red zones indicate where the AI detected structural faults.</p>
+              </div>
+            </div>
+          ) : preview ? (
             <div className="relative">
               <img
                 src={preview}

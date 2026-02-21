@@ -118,6 +118,7 @@ export default function LandingPage({ onLaunch }) {
                     </div>
                     <div className="lp-nav-links">
                         <a href="#features">Features</a>
+                        <a href="#gradcam">Grad-CAM</a>
                         <a href="#tech">Tech Stack</a>
                         <a href="#how">How It Works</a>
                     </div>
@@ -261,6 +262,94 @@ export default function LandingPage({ onLaunch }) {
                         title="GPU-Accelerated"
                         desc="Trained on an NVIDIA RTX 4060 Laptop GPU. Inference runs on CPU for lightweight deployment anywhere."
                     />
+                    <FeatureCard delay={480}
+                        icon={
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                                <line x1="12" y1="2" x2="12" y2="5" /><line x1="12" y1="19" x2="12" y2="22" />
+                                <line x1="2" y1="12" x2="5" y2="12" /><line x1="19" y1="12" x2="22" y2="12" />
+                            </svg>
+                        }
+                        title="X-Ray Vision (Grad-CAM)"
+                        desc="Explainable AI heatmap overlaid on the image — red zones show exactly where the AI detected the structural fault, not just a label."
+                    />
+                </div>
+            </Section>
+
+            {/* ── Grad-CAM Spotlight ── */}
+            <Section className="lp-section lp-section--alt" id="gradcam">
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '48px', alignItems: 'center' }}>
+                    {/* Left: explanation */}
+                    <div>
+                        <div className="lp-section-label" style={{ color: '#a78bfa' }}>Explainable AI</div>
+                        <h2 className="lp-section-title">X-Ray Vision with Grad-CAM</h2>
+                        <p style={{ fontSize: '15px', color: '#6b7280', lineHeight: '1.75', marginBottom: '24px' }}>
+                            Most AI models are opaque black boxes. CrackSense uses <strong style={{ color: '#d1d5db' }}>Gradient-weighted Class Activation Mapping (Grad-CAM)</strong> to
+                            reverse-engineer the model's decision and produce a visual explanation — proving the AI
+                            is genuinely looking at the structural fault, not guessing.
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                            {[
+                                { icon: '🔴', label: 'Red / Yellow zones', desc: 'Highest attention — AI found crack patterns here' },
+                                { icon: '🟢', label: 'Blue / Cyan zones', desc: 'Low attention — AI sees intact concrete here' },
+                                { icon: '📊', label: 'Gradient pooling', desc: 'Gradients from the last Conv layer weighted by importance' },
+                            ].map(({ icon, label, desc }) => (
+                                <div key={label} style={{ display: 'flex', gap: '14px', alignItems: 'flex-start' }}>
+                                    <span style={{ fontSize: '20px', lineHeight: '1.4', flexShrink: 0 }}>{icon}</span>
+                                    <div>
+                                        <div style={{ fontSize: '13.5px', fontWeight: '600', color: '#e5e7eb', marginBottom: '2px' }}>{label}</div>
+                                        <div style={{ fontSize: '13px', color: '#6b7280', lineHeight: '1.55' }}>{desc}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    {/* Right: animated heatmap color strip visual */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div style={{
+                            borderRadius: '16px',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            overflow: 'hidden',
+                            background: 'rgba(255,255,255,0.02)',
+                        }}>
+                            {/* Mock heatmap gradient strip */}
+                            <div style={{
+                                height: '120px',
+                                background: 'linear-gradient(135deg, #00008b 0%, #0000ff 15%, #00ffff 30%, #00ff00 45%, #ffff00 60%, #ff8c00 75%, #ff0000 100%)',
+                                opacity: 0.85,
+                            }} />
+                            <div style={{ padding: '16px 18px', background: 'rgba(0,0,0,0.3)' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                                    <span style={{ fontSize: '11px', color: '#60a5fa', fontWeight: '600', letterSpacing: '0.05em' }}>LOW ATTENTION</span>
+                                    <span style={{ fontSize: '11px', color: '#f87171', fontWeight: '600', letterSpacing: '0.05em' }}>HIGH ATTENTION</span>
+                                </div>
+                                <div style={{
+                                    height: '6px',
+                                    borderRadius: '999px',
+                                    background: 'linear-gradient(90deg, #00008b, #0000ff, #00ffff, #00ff00, #ffff00, #ff8c00, #ff0000)',
+                                }} />
+                            </div>
+                        </div>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                            {[
+                                { label: 'XAI Framework', val: 'Grad-CAM' },
+                                { label: 'Colormap', val: 'JET (OpenCV)' },
+                                { label: 'Source Layer', val: 'Last Conv2D' },
+                                { label: 'Blend Ratio', val: '60% img / 40% heat' },
+                            ].map(({ label, val }) => (
+                                <div key={label} style={{
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid rgba(255,255,255,0.07)',
+                                    borderRadius: '10px',
+                                    padding: '12px 14px',
+                                }}>
+                                    <div style={{ fontSize: '10.5px', color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{label}</div>
+                                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#e5e7eb' }}>{val}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
                 </div>
             </Section>
 
@@ -276,6 +365,8 @@ export default function LandingPage({ onLaunch }) {
                                 { label: 'TensorFlow 2.x', color: '#ff6f00' },
                                 { label: 'Keras', color: '#d00000' },
                                 { label: 'MobileNetV2', color: '#e65100' },
+                                { label: 'Grad-CAM / XAI', color: '#a78bfa' },
+                                { label: 'OpenCV', color: '#5bc8f5' },
                                 { label: 'NumPy', color: '#4dabf7' },
                                 { label: 'PIL / Pillow', color: '#74c0fc' },
                             ]
@@ -339,7 +430,7 @@ export default function LandingPage({ onLaunch }) {
                             <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
                         </svg>
                     </div>
-                    <StepCard num="04" title="Report & Action" desc="Result, confidence score, and risk level are displayed instantly. Download a PDF inspection report." />
+                    <StepCard num="04" title="Report & Action" desc="Result, confidence score, and a Grad-CAM heatmap are shown instantly — the AI highlights exactly where the crack is. Download a full PDF inspection report." />
                 </div>
             </Section>
 
@@ -385,7 +476,7 @@ export default function LandingPage({ onLaunch }) {
             <Section className="lp-cta-section">
                 <div className="lp-cta-glow" aria-hidden="true" />
                 <h2 className="lp-cta-title">Ready to inspect a structure?</h2>
-                <p className="lp-cta-sub">Upload a concrete image and get an AI-powered diagnosis in under a second.</p>
+                <p className="lp-cta-sub">Upload a concrete image and get an AI-powered diagnosis with a Grad-CAM X-Ray heatmap in under a second.</p>
                 <button className="lp-btn-primary lp-btn-large" onClick={onLaunch}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
