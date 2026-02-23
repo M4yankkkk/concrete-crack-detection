@@ -118,6 +118,7 @@ export default function LandingPage({ onLaunch }) {
                     </div>
                     <div className="lp-nav-links">
                         <a href="#features">Features</a>
+                        <a href="#video">Video Analysis</a>
                         <a href="#gradcam">Grad-CAM</a>
                         <a href="#tech">Tech Stack</a>
                         <a href="#how">How It Works</a>
@@ -274,6 +275,16 @@ export default function LandingPage({ onLaunch }) {
                         title="X-Ray Vision (Grad-CAM)"
                         desc="Explainable AI heatmap overlaid on the image — red zones show exactly where the AI detected the structural fault, not just a label."
                     />
+                    <FeatureCard delay={560}
+                        icon={
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="5" width="15" height="14" rx="2" />
+                                <path d="m17 9 5-3v12l-5-3" />
+                            </svg>
+                        }
+                        title="Drone Video Analysis"
+                        desc="Upload any drone footage — the app auto-detects FPS, samples 1 frame per 10, runs AI on every sample, and builds a real-time incident log with Grad-CAM heatmaps."
+                    />
                 </div>
             </Section>
 
@@ -348,6 +359,175 @@ export default function LandingPage({ onLaunch }) {
                                     <div style={{ fontSize: '13px', fontWeight: '600', color: '#e5e7eb' }}>{val}</div>
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                </div>
+            </Section>
+
+            {/* ── Video Analysis Showcase ── */}
+            <Section id="video" className="lp-section">
+                <div className="lp-section-label" style={{ color: '#818cf8' }}>New Feature</div>
+                <h2 className="lp-section-title">Drone Video Analysis</h2>
+                <p className="lp-section-sub">
+                    Upload raw drone footage — CrackSense auto-detects FPS, samples intelligently,
+                    and produces a real-time incident log with Grad-CAM heatmaps and a detailed PDF report.
+                </p>
+
+                {/* Two-column layout */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', marginTop: '8px' }}>
+
+                    {/* Left: feature chips */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                        {[
+                            { icon: '🎞', title: 'Auto FPS Detection', desc: 'Uses requestVideoFrameCallback to measure actual frame rate — no guessing.' },
+                            { icon: '🔬', title: 'Smart Frame Sampling', desc: '1 sample every 10 source frames — finds defects without processing every frame.' },
+                            { icon: '⚡', title: 'Live Incident Log', desc: 'Defect cards with Grad-CAM thumbnails appear in real-time as results stream in.' },
+                            { icon: '🔍', title: 'Heatmap Zoom Modal', desc: 'Click any thumbnail to view full-size Grad-CAM with confidence bar and metadata.' },
+                            { icon: '📄', title: 'Multi-page PDF Report', desc: 'Cover page + one Grad-CAM page per defect + full defect table + recommendations.' },
+                        ].map(({ icon, title, desc }) => (
+                            <div key={title} style={{
+                                display: 'flex',
+                                gap: '14px',
+                                padding: '14px 16px',
+                                background: 'rgba(255,255,255,0.02)',
+                                border: '1px solid rgba(255,255,255,0.06)',
+                                borderRadius: '12px',
+                                alignItems: 'flex-start',
+                            }}>
+                                <span style={{ fontSize: '20px', lineHeight: '1.4', flexShrink: 0 }}>{icon}</span>
+                                <div>
+                                    <div style={{ fontSize: '13.5px', fontWeight: 700, color: '#e5e7eb', marginBottom: '3px' }}>{title}</div>
+                                    <div style={{ fontSize: '12.5px', color: '#6b7280', lineHeight: 1.55 }}>{desc}</div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* Right: demo card */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+
+                        {/* Video preview card */}
+                        <div style={{
+                            background: 'rgba(99,102,241,0.07)',
+                            border: '1px solid rgba(99,102,241,0.2)',
+                            borderRadius: '16px',
+                            overflow: 'hidden',
+                        }}>
+                            {/* Header */}
+                            <div style={{
+                                padding: '14px 18px',
+                                borderBottom: '1px solid rgba(99,102,241,0.15)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                            }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#818cf8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="2" y="5" width="15" height="14" rx="2" /><path d="m17 9 5-3v12l-5-3" />
+                                </svg>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#a5b4fc' }}>Sample Drone Footage</span>
+                            </div>
+                            {/* Body */}
+                            <div style={{ padding: '18px' }}>
+                                <p style={{ fontSize: '13px', color: '#6b7280', lineHeight: 1.65, marginBottom: '16px' }}>
+                                    WhatsApp drone footage used for the demo analysis. 30 fps · 10-second clip · 31 samples extracted · 17 defects detected.
+                                </p>
+                                <a
+                                    href="https://drive.google.com/file/d/1DS6gmV4T5dkeLSRNplKoD_piaLfdzzDE/view?usp=sharing"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '10px',
+                                        background: 'rgba(99,102,241,0.15)',
+                                        border: '1px solid rgba(99,102,241,0.3)',
+                                        borderRadius: '10px',
+                                        color: '#a5b4fc',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        textDecoration: 'none',
+                                        transition: 'background 0.2s',
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    View Sample Video on Google Drive
+                                </a>
+                            </div>
+                        </div>
+
+                        {/* PDF report card */}
+                        <div style={{
+                            background: 'rgba(220,38,38,0.06)',
+                            border: '1px solid rgba(220,38,38,0.18)',
+                            borderRadius: '16px',
+                            overflow: 'hidden',
+                        }}>
+                            <div style={{
+                                padding: '14px 18px',
+                                borderBottom: '1px solid rgba(220,38,38,0.12)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                            }}>
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+                                </svg>
+                                <span style={{ fontSize: '13px', fontWeight: 600, color: '#fca5a5' }}>AI Inspection Report</span>
+                                <span style={{
+                                    marginLeft: 'auto',
+                                    fontSize: '10px',
+                                    fontWeight: 700,
+                                    letterSpacing: '0.08em',
+                                    padding: '2px 8px',
+                                    background: 'rgba(220,38,38,0.2)',
+                                    border: '1px solid rgba(220,38,38,0.3)',
+                                    borderRadius: '999px',
+                                    color: '#fca5a5',
+                                }}>PDF</span>
+                            </div>
+                            <div style={{ padding: '18px' }}>
+                                <div style={{ fontSize: '12.5px', color: '#6b7280', lineHeight: 1.65, marginBottom: '16px' }}>
+                                    <strong style={{ color: '#d1d5db' }}>17 defects across 31 samples.</strong> Includes executive summary,
+                                    per-defect Grad-CAM pages with confidence bars, and a full defect table with severity classification.
+                                </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '16px' }}>
+                                    {[
+                                        '📋 Executive summary with verdict & stats',
+                                        '🔥 Full-size Grad-CAM per defect page',
+                                        '📊 Severity breakdown (Critical/High/Moderate)',
+                                        '⚠️ Recommendations & next steps',
+                                    ].map(line => (
+                                        <div key={line} style={{ fontSize: '12px', color: '#6b7280' }}>{line}</div>
+                                    ))}
+                                </div>
+                                <a
+                                    href="/Video_report.pdf"
+                                    download="CrackSense_Drone_Inspection_Report.pdf"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        padding: '10px',
+                                        background: 'rgba(220,38,38,0.15)',
+                                        border: '1px solid rgba(220,38,38,0.3)',
+                                        borderRadius: '10px',
+                                        color: '#fca5a5',
+                                        fontSize: '13px',
+                                        fontWeight: 600,
+                                        textDecoration: 'none',
+                                    }}
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                                    </svg>
+                                    Download Sample PDF Report
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -465,7 +645,8 @@ export default function LandingPage({ onLaunch }) {
                 <div className="lp-section-label">What's Next</div>
                 <h2 className="lp-section-title">Future Roadmap</h2>
                 <div className="lp-roadmap-grid">
-                    <RoadmapItem icon="🚁" text="Drone video feed integration for bridge and building inspection" />
+                    <RoadmapItem icon="✅" text="Drone video feed analysis with real-time incident log — shipped!" />
+                    <RoadmapItem icon="✅" text="Multi-page PDF report with Grad-CAM per defect page — shipped!" />
                     <RoadmapItem icon="🔍" text="Crack severity classification — Hairline vs Deep cracks" />
                     <RoadmapItem icon="📟" text="Deployment on edge devices (Raspberry Pi / NVIDIA Jetson)" />
                     <RoadmapItem icon="☁️" text="Cloud-based inspection dashboard with team collaboration" />
@@ -476,7 +657,7 @@ export default function LandingPage({ onLaunch }) {
             <Section className="lp-cta-section">
                 <div className="lp-cta-glow" aria-hidden="true" />
                 <h2 className="lp-cta-title">Ready to inspect a structure?</h2>
-                <p className="lp-cta-sub">Upload a concrete image and get an AI-powered diagnosis with a Grad-CAM X-Ray heatmap in under a second.</p>
+                <p className="lp-cta-sub">Upload a concrete image for instant AI analysis, or drop in drone footage for a full frame-by-frame video inspection — both with Grad-CAM heatmaps and PDF reports.</p>
                 <button className="lp-btn-primary lp-btn-large" onClick={onLaunch}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M3 7V5a2 2 0 0 1 2-2h2" /><path d="M17 3h2a2 2 0 0 1 2 2v2" />
