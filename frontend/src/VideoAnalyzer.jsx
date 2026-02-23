@@ -747,7 +747,7 @@ export default function VideoAnalyzer() {
     async function sendFrame({ blob, timestamp }) {
         const apiUrl = import.meta.env.VITE_API_URL;
         const MAX_RETRIES = 3;
-        const RETRY_MS = [600, 1500, 3000]; // backoff per attempt
+        const RETRY_MS = [2000, 5000, 10000]; // longer backoff — Render needs time to recover
 
         for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
             try {
@@ -756,7 +756,7 @@ export default function VideoAnalyzer() {
 
                 const res = await axios.post(`${apiUrl}/predict`, formData, {
                     headers: { 'Content-Type': 'multipart/form-data' },
-                    timeout: 30_000, // 30 s — Render can be slow on cold start
+                    timeout: 45_000, // 45 s — generous for TF + Grad-CAM on Render
                 });
                 const data = res.data;
 
@@ -833,8 +833,8 @@ export default function VideoAnalyzer() {
 
             // ── Step 4: Send frames SEQUENTIALLY (one at a time) ─────────────
             // Render's free tier can't handle concurrent ML requests reliably.
-            // Sequential + 300 ms delay keeps the dyno happy.
-            const INTER_REQUEST_DELAY_MS = 300;
+            // Sequential + 800 ms delay gives Render GC time between heavy TF inferences
+            const INTER_REQUEST_DELAY_MS = 800;
 
             for (let i = 0; i < frames.length; i++) {
                 const result = await sendFrame(frames[i]);

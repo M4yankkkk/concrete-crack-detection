@@ -8,6 +8,7 @@ import io
 import os
 import cv2
 import base64
+import gc
 
 # Resolve model path relative to this script so it works no matter
 # which directory uvicorn is launched from.
@@ -24,15 +25,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-model = None
+model     = None
+grad_model = None   # cached Grad-CAM sub-model — built once, reused for every request
 
 @app.on_event("startup")
 async def load_model():
-    global model
+    global model, grad_model
     if os.path.exists(MODEL_PATH):
         try:
             model = tf.keras.models.load_model(MODEL_PATH)
             print(f"✅ Model loaded from: {MODEL_PATH}")
+            # Pre-build the Grad-CAM graph once at startup so it is NOT
+            # recreated on every request (which causes TF graph bloat → OOM)
+            grad_model = _build_grad_model(model)
+            print("✅ Grad-CAM sub-model cached")
         except Exception as e:
             print(f"❌ Error loading model: {e}")
     else:
@@ -56,51 +62,45 @@ def prepare_image(image_data):
 
     return original_rgb, img_array
 
-def get_gradcam_heatmap(model, img_array):
-    # 1. Extract the MobileNetV2 base model (Functional API — has proper .output)
-    base_model = model.layers[0]  # This is the MobileNetV2 sub-model
-
-    # 2. Find the last convolutional layer inside the base model for the feature map
+def _build_grad_model(mdl):
+    """Build the Grad-CAM sub-model ONCE and cache it as `grad_model`."""
+    base_model = mdl.layers[0]  # MobileNetV2 sub-model
     last_conv_layer = None
     for layer in reversed(base_model.layers):
         if isinstance(layer, tf.keras.layers.Conv2D):
             last_conv_layer = layer
             break
-
     if last_conv_layer is None:
         raise ValueError("No Conv2D layer found in the base model.")
-
-    # 3. Build a sub-model: base_model.input → [last_conv_output, base_model.output]
-    #    Both are Functional API tensors so this is safe.
-    grad_model = tf.keras.models.Model(
+    return tf.keras.models.Model(
         inputs=base_model.input,
         outputs=[last_conv_layer.output, base_model.output]
     )
 
-    # 4. Run the grad model and record gradients
+def get_gradcam_heatmap(img_array):
+    """Run Grad-CAM using the module-level cached grad_model."""
     img_tensor = tf.cast(img_array, tf.float32)
     with tf.GradientTape() as tape:
         conv_outputs, base_out = grad_model(img_tensor)
         tape.watch(conv_outputs)
-
-        # Pass base_out through the remaining Sequential layers (GlobalAvgPool + Dense)
         x = base_out
-        for layer in model.layers[1:]:   # layers after the base model
+        for layer in model.layers[1:]:
             x = layer(x)
         loss = x[:, 0]
 
-    # 5. Calculate gradients & pool them across spatial dims
-    grads = tape.gradient(loss, conv_outputs)
+    grads       = tape.gradient(loss, conv_outputs)
     pooled_grads = tf.reduce_mean(grads, axis=(0, 1, 2))
 
-    # 6. Weight the feature map channels by their gradient importance
-    conv_outputs = conv_outputs[0]
-    heatmap = conv_outputs @ tf.reshape(pooled_grads, (-1, 1))
-    heatmap = tf.squeeze(heatmap)
+    conv_np   = conv_outputs[0].numpy()      # pull to NumPy early to free TF tensors
+    grads_np  = pooled_grads.numpy()
+    heatmap   = conv_np @ grads_np.reshape(-1, 1)
+    heatmap   = np.squeeze(heatmap)
+    heatmap   = np.maximum(heatmap, 0)
+    heatmap  /= (heatmap.max() + 1e-10)
 
-    # 7. Keep only positive activations and normalize to [0, 1]
-    heatmap = tf.maximum(heatmap, 0) / (tf.math.reduce_max(heatmap) + 1e-10)
-    return heatmap.numpy()
+    # Free intermediate arrays explicitly
+    del conv_np, grads_np, conv_outputs, base_out, grads, pooled_grads
+    return heatmap
 
 def overlay_heatmap(heatmap, original_image):
     # Resize and colorize the heatmap
@@ -123,40 +123,50 @@ def health():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    if not model:
+    if not model or not grad_model:
         return {"error": "Model is not loaded."}
 
     contents = await file.read()
+    original_rgb = None
     try:
         original_rgb, processed_tensor = prepare_image(contents)
+        del contents   # free raw upload bytes immediately
 
         # AI Prediction
-        prediction = model.predict(processed_tensor)
+        prediction = model.predict(processed_tensor, verbose=0)
         score = float(prediction[0][0])
+        del prediction
 
-        # Generate Grad-CAM Heatmap Overlay
-        heatmap = get_gradcam_heatmap(model, processed_tensor)
+        # Generate Grad-CAM heatmap using cached sub-model
+        heatmap = get_gradcam_heatmap(processed_tensor)
+        del processed_tensor
+
         overlay_img = overlay_heatmap(heatmap, original_rgb)
+        del heatmap, original_rgb
+        original_rgb = None
 
-        # Encode image to Base64 string so React can render it
-        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(overlay_img, cv2.COLOR_RGB2BGR))
+        # Encode to JPEG base64
+        _, buffer = cv2.imencode('.jpg', cv2.cvtColor(overlay_img, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 80])
+        del overlay_img
         base64_img = base64.b64encode(buffer).decode('utf-8')
+        del buffer
 
-        # Optimized threshold: score > 0.5 = crack
-        label = "CRACK DETECTED ⚠️" if score > 0.5 else "Safe / No Crack ✅"
-        if score > 0.5:
-            confidence = (score - 0.5) / 0.5
-        else:
-            confidence = 1 - score
+        label = "CRACK DETECTED \u26a0\ufe0f" if score > 0.5 else "Safe / No Crack \u2705"
+        confidence = (score - 0.5) / 0.5 if score > 0.5 else 1 - score
 
         return {
             "filename": file.filename,
-            "result": label,
+            "result":   label,
             "confidence": f"{confidence:.2%}",
-            "raw_score": score,
-            "heatmap": f"data:image/jpeg;base64,{base64_img}"
+            "raw_score":  score,
+            "heatmap":  f"data:image/jpeg;base64,{base64_img}"
         }
     except Exception as e:
         import traceback
         traceback.print_exc()
+        if original_rgb is not None:
+            del original_rgb
         return {"error": str(e)}
+    finally:
+        # Explicit GC after every request to keep Render free-tier RAM stable
+        gc.collect()
