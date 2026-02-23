@@ -11,12 +11,6 @@ function formatTime(sec) {
     return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-/** Split an array into chunks of `size` */
-function chunk(arr, size) {
-    const out = [];
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
-    return out;
-}
 
 /** Wrap the `seeked` event in a Promise so we can await it */
 function waitForSeek(videoEl) {
@@ -663,6 +657,7 @@ export default function VideoAnalyzer() {
 
     // Analysis state
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [warmingUp, setWarmingUp] = useState(false); // true during backend wake-up ping
     const [progress, setProgress] = useState({ processed: 0, total: 0 });
     const [incidentLog, setIncidentLog] = useState([]);
     const [analysisComplete, setAnalysisComplete] = useState(false);
@@ -742,32 +737,53 @@ export default function VideoAnalyzer() {
         return { frames, totalSamples: frames.length };
     }
 
-    // ── API Caller ─────────────────────────────────────────────────────────────
+    // ── API Caller (with retry + backoff) ──────────────────────────────────────
 
+    /**
+     * Send one frame to /predict.
+     * Retries up to MAX_RETRIES times on 502/503/network errors,
+     * using exponential backoff. Returns null if all retries fail.
+     */
     async function sendFrame({ blob, timestamp }) {
         const apiUrl = import.meta.env.VITE_API_URL;
-        const formData = new FormData();
-        formData.append('file', blob, `frame_${timestamp}.jpg`);
+        const MAX_RETRIES = 3;
+        const RETRY_MS = [600, 1500, 3000]; // backoff per attempt
 
-        try {
-            const res = await axios.post(`${apiUrl}/predict`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-            });
-            const data = res.data;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+                const formData = new FormData();
+                formData.append('file', blob, `frame_${timestamp}.jpg`);
 
-            // Only crack results get added to the incident log
-            if (data.result && data.result.includes('CRACK')) {
-                return {
-                    timestamp,
-                    timestampLabel: formatTime(timestamp),
-                    confidence: data.confidence,
-                    raw_score: data.raw_score,
-                    heatmap: data.heatmap,
-                    label: data.result,
-                };
+                const res = await axios.post(`${apiUrl}/predict`, formData, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    timeout: 30_000, // 30 s — Render can be slow on cold start
+                });
+                const data = res.data;
+
+                if (data.result && data.result.includes('CRACK')) {
+                    return {
+                        timestamp,
+                        timestampLabel: formatTime(timestamp),
+                        confidence: data.confidence,
+                        raw_score: data.raw_score,
+                        heatmap: data.heatmap,
+                        label: data.result,
+                    };
+                }
+                return null; // clean no-crack result — no retry needed
+
+            } catch (err) {
+                const status = err.response?.status;
+                const isRetryable = !status || status === 502 || status === 503 || status === 504;
+
+                if (isRetryable && attempt < MAX_RETRIES - 1) {
+                    console.warn(`[VA] frame t=${timestamp}s → ${status ?? 'network'} error, retrying in ${RETRY_MS[attempt]}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
+                    await new Promise(r => setTimeout(r, RETRY_MS[attempt]));
+                } else {
+                    console.warn(`[VA] frame t=${timestamp}s → giving up after ${attempt + 1} attempt(s):`, err.message);
+                    return null;
+                }
             }
-        } catch (err) {
-            console.warn(`Frame at t=${timestamp}s failed:`, err.message);
         }
         return null;
     }
@@ -784,39 +800,55 @@ export default function VideoAnalyzer() {
         setDetectedFps(null);
 
         try {
+            const apiUrl = import.meta.env.VITE_API_URL;
             const hiddenVideo = hiddenVideoRef.current;
             const canvas = canvasRef.current;
 
-            // Load video into hidden element
+            // ── Step 0: wake up the Render instance (cold-start ping) ────────
+            setWarmingUp(true);
+            try {
+                await axios.get(`${apiUrl}/health`, { timeout: 20_000 });
+                console.info('[VA] Backend warm-up ping OK');
+            } catch {
+                console.warn('[VA] Warm-up ping failed or timed out — proceeding anyway');
+            } finally {
+                setWarmingUp(false);
+            }
+
+            // ── Step 1: Load video metadata ───────────────────────────────────
             hiddenVideo.src = videoUrl;
             await new Promise((resolve, reject) => {
                 hiddenVideo.onloadedmetadata = resolve;
                 hiddenVideo.onerror = reject;
             });
 
-            // Step 0: detect FPS
+            // ── Step 2: Detect FPS ────────────────────────────────────────────
             const fps = await detectFPS(hiddenVideo);
             setDetectedFps(fps);
-            console.info(`[VideoAnalyzer] Detected ${fps} fps — sampling 1 frame every ${SAMPLE_EVERY} frames (every ${(SAMPLE_EVERY / fps).toFixed(3)} s)`);
+            console.info(`[VA] ${fps} fps → 1 sample every ${SAMPLE_EVERY} frames (${(SAMPLE_EVERY / fps).toFixed(3)} s)`);
 
-            // Step 1: Extract sampled frames
+            // ── Step 3: Extract sampled frames ────────────────────────────────
             const { frames, totalSamples } = await extractFrames(hiddenVideo, canvas, fps);
             setProgress({ processed: 0, total: totalSamples });
 
-            // Step 2: Process in batches of 3
-            const batches = chunk(frames, 3);
-            let processed = 0;
+            // ── Step 4: Send frames SEQUENTIALLY (one at a time) ─────────────
+            // Render's free tier can't handle concurrent ML requests reliably.
+            // Sequential + 300 ms delay keeps the dyno happy.
+            const INTER_REQUEST_DELAY_MS = 300;
 
-            for (const batch of batches) {
-                const results = await Promise.all(batch.map(sendFrame));
+            for (let i = 0; i < frames.length; i++) {
+                const result = await sendFrame(frames[i]);
 
-                const cracks = results.filter(Boolean);
-                if (cracks.length > 0) {
-                    setIncidentLog((prev) => [...prev, ...cracks]);
+                if (result) {
+                    setIncidentLog(prev => [...prev, result]);
                 }
 
-                processed += batch.length;
-                setProgress({ processed: Math.min(processed, totalSamples), total: totalSamples });
+                setProgress({ processed: i + 1, total: totalSamples });
+
+                // Small pause between requests to avoid overwhelming the server
+                if (i < frames.length - 1) {
+                    await new Promise(r => setTimeout(r, INTER_REQUEST_DELAY_MS));
+                }
             }
 
             setAnalysisComplete(true);
@@ -896,48 +928,58 @@ export default function VideoAnalyzer() {
             <video ref={hiddenVideoRef} style={{ display: 'none' }} preload="auto" crossOrigin="anonymous" />
             <canvas ref={canvasRef} style={{ display: 'none' }} />
 
-            {/* ── Left Column: Video Player ── */}
+            {/* ── Left Column ── */}
             <div className="va-left">
+
+                {/* Video player */}
                 <div className="va-player-wrap">
                     {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-                    <video
-                        ref={videoRef}
-                        src={videoUrl}
-                        controls
-                        className="va-video-player"
-                    />
+                    <video ref={videoRef} src={videoUrl} controls className="va-video-player" />
                 </div>
 
+                {/* File info strip */}
                 <div className="va-file-meta">
                     <span className="va-file-name">📁 {videoFile.name}</span>
-                    <button
-                        className="va-change-btn"
-                        onClick={() => { setVideoFile(null); setVideoUrl(null); setIncidentLog([]); setAnalysisComplete(false); setProgress({ processed: 0, total: 0 }); }}
-                    >
-                        Change file
-                    </button>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {detectedFps && (
+                            <span style={{ fontSize: 11, color: '#4b5563', fontVariantNumeric: 'tabular-nums' }}>
+                                {detectedFps} fps
+                            </span>
+                        )}
+                        <button
+                            className="va-change-btn"
+                            onClick={() => {
+                                setVideoFile(null); setVideoUrl(null);
+                                setIncidentLog([]); setAnalysisComplete(false);
+                                setProgress({ processed: 0, total: 0 }); setDetectedFps(null);
+                            }}
+                        >
+                            Change file
+                        </button>
+                    </div>
                 </div>
 
                 {/* Progress bar */}
-                {(isAnalyzing || analysisComplete) && (
+                {(isAnalyzing || warmingUp || analysisComplete) && (
                     <div className="va-progress-wrap">
                         <div className="va-progress-header">
                             <span className="va-progress-label">
-                                {analysisComplete ? '✅ Analysis Complete' : '⚙️ Analyzing drone footage…'}
+                                {warmingUp
+                                    ? '🔄 Waking up server…'
+                                    : analysisComplete
+                                        ? '✅ Analysis Complete'
+                                        : '⚙️ Analyzing…'}
                             </span>
                             <span className="va-progress-count">
-                                {progress.processed} / {progress.total} samples
+                                {warmingUp ? 'Connecting…' : `${progress.processed} / ${progress.total} samples`}
                             </span>
                         </div>
                         <div className="va-progress-track">
-                            <div
-                                className="va-progress-fill"
-                                style={{ width: `${progressPct}%` }}
-                            />
+                            <div className="va-progress-fill" style={{ width: warmingUp ? '5%' : `${progressPct}%` }} />
                         </div>
                         {detectedFps && (
                             <div className="va-fps-badge">
-                                <span>🎞 {detectedFps} fps detected</span>
+                                <span>🎞 {detectedFps} fps</span>
                                 <span className="va-fps-sep">·</span>
                                 <span>1 sample / {SAMPLE_EVERY} frames ({(SAMPLE_EVERY / detectedFps * 1000).toFixed(0)} ms)</span>
                             </div>
@@ -945,34 +987,44 @@ export default function VideoAnalyzer() {
                     </div>
                 )}
 
-                {/* Start button */}
+                {/* Start / Reanalyze buttons */}
                 {!isAnalyzing && !analysisComplete && (
                     <button id="startAnalysisBtn" className="va-start-btn" onClick={handleStartAnalysis}>
                         <PlayIcon />
                         Start Analysis
                     </button>
                 )}
+                {analysisComplete && (
+                    <button
+                        className="va-start-btn"
+                        style={{ background: 'rgba(255,255,255,0.08)', color: '#d1d5db', border: '1px solid rgba(255,255,255,0.12)' }}
+                        onClick={() => {
+                            setAnalysisComplete(false); setIncidentLog([]);
+                            setProgress({ processed: 0, total: 0 }); setDetectedFps(null);
+                        }}
+                    >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" />
+                            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                        </svg>
+                        Reanalyze
+                    </button>
+                )}
 
-                {/* Summary after completion */}
+                {/* Summary */}
                 {analysisComplete && (
                     <div className={`va-summary ${incidentLog.length > 0 ? 'va-summary--crack' : 'va-summary--safe'}`}>
                         {incidentLog.length > 0 ? (
-                            <>
-                                <AlertIcon />
-                                <span><strong>{incidentLog.length} defect{incidentLog.length !== 1 ? 's' : ''}</strong> detected in {progress.total} samples</span>
-                            </>
+                            <><AlertIcon /><span><strong>{incidentLog.length} defect{incidentLog.length !== 1 ? 's' : ''}</strong> detected in {progress.total} samples</span></>
                         ) : (
-                            <>
-                                <CheckIcon />
-                                <span><strong>No cracks detected</strong> across {progress.total} frames</span>
-                            </>
+                            <><CheckIcon /><span><strong>No cracks detected</strong> across {progress.total} samples</span></>
                         )}
                     </div>
                 )}
 
                 {error && <div className="va-error">{error}</div>}
 
-                {/* Download PDF report */}
+                {/* Download PDF */}
                 {analysisComplete && (
                     <button
                         id="downloadVideoReportBtn"
@@ -989,8 +1041,10 @@ export default function VideoAnalyzer() {
                 )}
             </div>
 
-            {/* ── Right Column: Incident Timeline ── */}
+            {/* ── Right Column: Incident Log ── */}
             <div className="va-right">
+
+                {/* Header */}
                 <div className="va-timeline-header">
                     <span className="va-timeline-title">Incident Log</span>
                     {incidentLog.length > 0 && (
@@ -998,19 +1052,46 @@ export default function VideoAnalyzer() {
                     )}
                 </div>
 
-                {/* Live updating log */}
+                {/* Stats strip — shown once analysis has run */}
+                {(isAnalyzing || analysisComplete) && progress.total > 0 && (
+                    <div className="va-stat-strip">
+                        <div className="va-stat-cell">
+                            <span className={`va-stat-value ${incidentLog.length > 0 ? 'va-stat-value--red' : ''}`}>
+                                {incidentLog.length}
+                            </span>
+                            <span className="va-stat-key">Defects</span>
+                        </div>
+                        <div className="va-stat-cell">
+                            <span className="va-stat-value">{progress.total}</span>
+                            <span className="va-stat-key">Samples</span>
+                        </div>
+                        <div className="va-stat-cell">
+                            <span className={`va-stat-value ${progress.total - incidentLog.length === progress.total ? 'va-stat-value--green' : ''}`}>
+                                {progress.total - incidentLog.length}
+                            </span>
+                            <span className="va-stat-key">Clear</span>
+                        </div>
+                    </div>
+                )}
+
+                {/* Live log */}
                 <div className="va-incident-log">
                     {incidentLog.length === 0 ? (
                         <div className="va-log-empty">
                             {isAnalyzing ? (
                                 <>
                                     <div className="va-log-scanning-dot" />
-                                    <p>Scanning frames for structural defects…</p>
+                                    <p style={{ fontSize: 13, color: '#6b7280' }}>Scanning for structural defects…</p>
                                 </>
                             ) : (
-                                <p className="va-log-placeholder">
-                                    {analysisComplete ? '✅ All clear — no defects found.' : 'Defects will appear here in real-time once analysis starts.'}
-                                </p>
+                                <>
+                                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                        <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                                    </svg>
+                                    <p className="va-log-placeholder">
+                                        {analysisComplete ? '✅ All clear — no defects found.' : 'Defects will appear here in real-time.'}
+                                    </p>
+                                </>
                             )}
                         </div>
                     ) : (
