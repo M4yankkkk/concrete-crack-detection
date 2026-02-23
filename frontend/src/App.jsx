@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import axios from 'axios';
 import { jsPDF } from 'jspdf';
+import VideoAnalyzer from './VideoAnalyzer.jsx';
 
 // ─── Icons (inline SVG, zero extra deps) ────────────────────────────────────
 
@@ -66,6 +67,7 @@ function ConfidenceBar({ score, isCrack }) {
 // ─── Main App ────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const [mode, setMode] = useState('image'); // 'image' | 'video'
   const [selectedFile, setSelectedFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [result, setResult] = useState(null);
@@ -290,7 +292,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-[#0f0f0f] text-neutral-100 flex flex-col items-center justify-start px-4 pt-16 pb-16">
 
-      {/* ── Header ── */}
+      {/* ── Shared Header ── */}
       <header className="text-center mb-12">
         <div className="inline-flex items-center gap-2 text-xs font-medium tracking-widest text-neutral-500 uppercase mb-4">
           <span className="w-5 h-px bg-neutral-700 inline-block" />
@@ -301,45 +303,95 @@ export default function App() {
           Structural Health Monitor
         </h1>
         <p className="mt-2 text-sm text-neutral-500">
-          Upload a concrete surface image to detect cracks with AI
+          {mode === 'image'
+            ? 'Upload a concrete surface image to detect cracks with AI'
+            : 'Upload drone footage to auto-detect structural defects frame by frame'}
         </p>
+
+        {/* Mode Toggle */}
+        <div className="app-mode-toggle app-mode-toggle--centered">
+          <button
+            id="modeImageBtn"
+            className={`app-mode-btn ${mode === 'image' ? 'app-mode-btn--active' : ''}`}
+            onClick={() => setMode('image')}
+          >
+            🖼️ Image Analysis
+          </button>
+          <button
+            id="modeVideoBtn"
+            className={`app-mode-btn ${mode === 'video' ? 'app-mode-btn--active' : ''}`}
+            onClick={() => setMode('video')}
+          >
+            🎬 Video Analysis
+          </button>
+        </div>
       </header>
 
-      {/* ── Card ── */}
-      <div className="w-full max-w-sm space-y-4">
+      {/* ── Video mode content ── */}
+      {mode === 'video' && (
+        <div className="w-full max-w-5xl">
+          <VideoAnalyzer />
+        </div>
+      )}
 
-        {/* Drop zone */}
-        <div
-          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
-          onClick={() => inputRef.current?.click()}
-          className={`
+      {/* ── Image mode content ── */}
+      {mode === 'image' && (
+        <div className="w-full max-w-sm space-y-4">
+
+          {/* Drop zone */}
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+            className={`
             relative rounded-2xl border cursor-pointer overflow-hidden
             transition-all duration-200
             ${dragOver
-              ? 'border-white/30 bg-white/5'
-              : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600 hover:bg-neutral-900'}
+                ? 'border-white/30 bg-white/5'
+                : 'border-neutral-800 bg-neutral-900/60 hover:border-neutral-600 hover:bg-neutral-900'}
           `}
-        >
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-            id="fileInput"
-          />
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileChange}
+              className="hidden"
+              id="fileInput"
+            />
 
-          {result && result.heatmap ? (
-            <div className="flex flex-col items-center w-full">
-              <div className="relative w-full">
+            {result && result.heatmap ? (
+              <div className="flex flex-col items-center w-full">
+                <div className="relative w-full">
+                  <img
+                    src={result.heatmap}
+                    alt="AI Grad-CAM Heatmap"
+                    className="w-full object-cover max-h-64"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                  <span className="absolute bottom-3 left-3 text-xs text-neutral-300 font-medium">
+                    {selectedFile?.name}
+                  </span>
+                  <span className="absolute bottom-3 right-3 text-xs text-neutral-400">
+                    Click to change
+                  </span>
+                </div>
+                <div className="w-full px-4 py-2.5 bg-blue-950/40 border-t border-blue-800/30 flex flex-col items-center gap-1">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/20 text-blue-300 font-bold text-xs rounded-full border border-blue-500/30">
+                    🔍 AI Attention Heatmap (Grad-CAM)
+                  </span>
+                  <p className="text-xs text-neutral-500">Red zones indicate where the AI detected structural faults.</p>
+                </div>
+              </div>
+            ) : preview ? (
+              <div className="relative">
                 <img
-                  src={result.heatmap}
-                  alt="AI Grad-CAM Heatmap"
+                  src={preview}
+                  alt="Preview"
                   className="w-full object-cover max-h-64"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <span className="absolute bottom-3 left-3 text-xs text-neutral-300 font-medium">
                   {selectedFile?.name}
                 </span>
@@ -347,130 +399,109 @@ export default function App() {
                   Click to change
                 </span>
               </div>
-              <div className="w-full px-4 py-2.5 bg-blue-950/40 border-t border-blue-800/30 flex flex-col items-center gap-1">
-                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-blue-500/20 text-blue-300 font-bold text-xs rounded-full border border-blue-500/30">
-                  🔍 AI Attention Heatmap (Grad-CAM)
-                </span>
-                <p className="text-xs text-neutral-500">Red zones indicate where the AI detected structural faults.</p>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-14 text-neutral-600 gap-3">
+                <UploadIcon />
+                <div className="text-center">
+                  <p className="text-sm text-neutral-400">Drop image here or click to browse</p>
+                  <p className="text-xs text-neutral-600 mt-1">JPG, PNG, WEBP</p>
+                </div>
               </div>
-            </div>
-          ) : preview ? (
-            <div className="relative">
-              <img
-                src={preview}
-                alt="Preview"
-                className="w-full object-cover max-h-64"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-              <span className="absolute bottom-3 left-3 text-xs text-neutral-300 font-medium">
-                {selectedFile?.name}
-              </span>
-              <span className="absolute bottom-3 right-3 text-xs text-neutral-400">
-                Click to change
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center py-14 text-neutral-600 gap-3">
-              <UploadIcon />
-              <div className="text-center">
-                <p className="text-sm text-neutral-400">Drop image here or click to browse</p>
-                <p className="text-xs text-neutral-600 mt-1">JPG, PNG, WEBP</p>
-              </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Analyze button */}
-        <button
-          id="analyzeBtn"
-          onClick={handleAnalyze}
-          disabled={!selectedFile || loading}
-          className={`
+          {/* Analyze button */}
+          <button
+            id="analyzeBtn"
+            onClick={handleAnalyze}
+            disabled={!selectedFile || loading}
+            className={`
             w-full flex items-center justify-center gap-2
             py-3 rounded-xl text-sm font-medium
             transition-all duration-200
             ${!selectedFile || loading
-              ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
-              : 'bg-white text-black hover:bg-neutral-100 active:scale-[0.98]'}
+                ? 'bg-neutral-800 text-neutral-600 cursor-not-allowed'
+                : 'bg-white text-black hover:bg-neutral-100 active:scale-[0.98]'}
           `}
-        >
-          {loading ? (
-            <>
-              <Spinner />
-              <span>Analyzing…</span>
-            </>
-          ) : (
-            <>
-              <ScanIcon />
-              <span>Analyze Image</span>
-            </>
+          >
+            {loading ? (
+              <>
+                <Spinner />
+                <span>Analyzing…</span>
+              </>
+            ) : (
+              <>
+                <ScanIcon />
+                <span>Analyze Image</span>
+              </>
+            )}
+          </button>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-400 text-center">
+              {error}
+            </div>
           )}
-        </button>
 
-        {/* Error */}
-        {error && (
-          <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 px-4 py-3 text-xs text-rose-400 text-center">
-            {error}
-          </div>
-        )}
-
-        {/* Result */}
-        {result && (
-          <div
-            className={`
+          {/* Result */}
+          {result && (
+            <div
+              className={`
               rounded-2xl border p-5 space-y-4
               transition-all duration-300
               ${isCrack
-                ? 'border-rose-900/50 bg-rose-950/20'
-                : 'border-emerald-900/50 bg-emerald-950/20'}
+                  ? 'border-rose-900/50 bg-rose-950/20'
+                  : 'border-emerald-900/50 bg-emerald-950/20'}
             `}
-          >
-            {/* Status badge */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-neutral-500 uppercase tracking-wider font-medium">
-                Result
-              </span>
-              <span
-                className={`
+            >
+              {/* Status badge */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-neutral-500 uppercase tracking-wider font-medium">
+                  Result
+                </span>
+                <span
+                  className={`
                   inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full
                   ${isCrack
-                    ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
-                    : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'}
+                      ? 'bg-rose-500/15 text-rose-400 border border-rose-500/20'
+                      : 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20'}
                 `}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${isCrack ? 'bg-rose-400' : 'bg-emerald-400'}`} />
-                {result.result}
-              </span>
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${isCrack ? 'bg-rose-400' : 'bg-emerald-400'}`} />
+                  {result.result}
+                </span>
+              </div>
+
+              {/* Confidence bar */}
+              <ConfidenceBar score={confidenceValue} isCrack={isCrack} />
+
+              {/* Filename */}
+              <p className="text-xs text-neutral-600 truncate">
+                {result.filename}
+              </p>
             </div>
+          )}
 
-            {/* Confidence bar */}
-            <ConfidenceBar score={confidenceValue} isCrack={isCrack} />
-
-            {/* Filename */}
-            <p className="text-xs text-neutral-600 truncate">
-              {result.filename}
-            </p>
-          </div>
-        )}
-
-        {/* Download report */}
-        <button
-          id="downloadReportBtn"
-          onClick={downloadReport}
-          disabled={!result}
-          className={`
+          {/* Download report */}
+          <button
+            id="downloadReportBtn"
+            onClick={downloadReport}
+            disabled={!result}
+            className={`
             w-full flex items-center justify-center gap-2
             py-2.5 rounded-xl text-xs font-medium border
             transition-all duration-200
             ${!result
-              ? 'border-neutral-800 text-neutral-700 cursor-not-allowed'
-              : 'border-neutral-700 text-neutral-300 hover:border-neutral-500 hover:text-white active:scale-[0.98]'}
+                ? 'border-neutral-800 text-neutral-700 cursor-not-allowed'
+                : 'border-neutral-700 text-neutral-300 hover:border-neutral-500 hover:text-white active:scale-[0.98]'}
           `}
-        >
-          <DownloadIcon />
-          Download PDF Report
-        </button>
-      </div>
+          >
+            <DownloadIcon />
+            Download PDF Report
+          </button>
+        </div>
+      )}
 
       {/* ── Footer ── */}
       <footer className="mt-16 text-xs text-neutral-700 text-center">
