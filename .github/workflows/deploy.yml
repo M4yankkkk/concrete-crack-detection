@@ -1,6 +1,5 @@
 name: Deploy Backend to Hugging Face
 
-# This tells GitHub to run this script every time you push to the 'main' branch
 on:
   push:
     branches: [main]
@@ -12,13 +11,27 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with:
-          fetch-depth: 0
+          # Notice we removed fetch-depth: 0. We don't want the history anymore!
           lfs: true
           
-      # This pushes only the backend code to Hugging Face
-      - name: Push to Hugging Face Space
+      - name: Deploy Clean Snapshot to Hugging Face
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          git config lfs.allowincompletepush true
-          git push --force https://CivilMaverick:$HF_TOKEN@huggingface.co/spaces/CivilMaverick/concrete-api main
+          # 1. Destroy the corrupted Git history on the runner
+          rm -rf .git
+          
+          # 2. Start a fresh, clean Git repository
+          git init
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          
+          # 3. Ensure LFS is active for this new repo
+          git lfs install
+          
+          # 4. Add the current, clean files (this reads your existing .gitattributes)
+          git add .
+          git commit -m "Clean Deploy Snapshot"
+          
+          # 5. Force push this single, perfect commit to Hugging Face
+          git push --force https://CivilMaverick:$HF_TOKEN@huggingface.co/spaces/CivilMaverick/concrete-api HEAD:main
