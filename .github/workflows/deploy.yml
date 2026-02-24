@@ -20,5 +20,5 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Replace YOUR_HF_USERNAME below!
+          git config lfs.allowincompletepush true
           git push --force https://CivilMaverick:$HF_TOKEN@huggingface.co/spaces/CivilMaverick/concrete-api main
