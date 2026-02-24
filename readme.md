@@ -1,9 +1,11 @@
+---
 title: Concrete Crack Detection API
 emoji: 🏗️
 colorFrom: gray
 colorTo: blue
 sdk: docker
 pinned: false
+---
 
 # 🏢 AI Structural Health Monitor — CrackSense
 
