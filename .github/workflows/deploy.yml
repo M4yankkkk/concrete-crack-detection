@@ -1,0 +1,24 @@
+name: Deploy Backend to Hugging Face
+
+# This tells GitHub to run this script every time you push to the 'main' branch
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+          
+      # This pushes only the backend code to Hugging Face
+      - name: Push to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Replace YOUR_HF_USERNAME below!
+          git push --force https://CivilMaverick:$HF_TOKEN@huggingface.co/spaces/CivilMaverick/concrete-api main
