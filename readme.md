@@ -1,3 +1,10 @@
+title: Concrete Crack Detection API
+emoji: 🏗️
+colorFrom: gray
+colorTo: blue
+sdk: docker
+pinned: false
+
 # 🏢 AI Structural Health Monitor — CrackSense
 
 ![React](https://img.shields.io/badge/Frontend-React%20(Vite)-blue)
